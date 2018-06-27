@@ -1,0 +1,276 @@
+---
+title: 决策树
+date:  2018/6/27
+categories: 机器学习
+mathjax: true
+---
+
+# 决策树
+
+## 1. 基本概念
+
+决策树是一种常见的机器学习方法,一般一棵决策树为一颗多叉树.
+每一个叶子节点就对应于一个决策结果.决策树的生成过程类似于数据结构中的树的生成过程.
+
+________________________________________
+输入:
+
+训练集$D=\{(x_1,y_1),(x_2,y_2),...,(x_m,y_m)\}$
+
+属性集$A=\{a_1,a_2,...,a_d\}$
+
+```python
+西瓜书基本算法:
+过程: 函数TreeGenerate(D, A)
+生成节点node
+if D中样本全属于同一类别C then
+    将node标记为C类叶节点; return
+end if
+if A为空 OR D中样本在A上的取值相同 then
+    将node标记为叶节点,其分类标记为D中样本数最多的类; return
+end if
+从A中选择最优的划分属性a;
+for a 的每一个值av do
+    为node生成一个分支;令Dv表示D中在a上取值为av的样本集;
+    if Dv 为空 then
+        将分支标记为叶节点,其类别标记为D中样本最多的类; return
+    else
+        以TreeGenerate(Dv, A-{a*})为分支节点
+    end if
+end for
+```
+
+输出: 以node为根节点的一颗决策树
+________________________________________
+
+以下为python代码的伪代码, 参考<<机器学习实战>>
+
+```python
+def create_tree(data_set, labels):
+    if D中样本全输入同一类别C:
+        return 类别C
+    if A为空:
+        return D中样本数最多的类
+    从A中选取最优划分属性a
+    node = {label: {}}
+    for a的每一个属性值av:
+        node[label][av] = {}
+        令Dv表示D在属性a上取值av的样本子集
+        if Dv为空:
+            node[label][av] = D中样本最多的类
+        else:
+            node[label][av] = create_tree(Dv, labels)
+    return node
+```
+
+在<<西瓜书>>中有三种情况导致递归返回:(1)当前节点包含的样本全属于同一类别, 无需划分;(2)当前属性集为空,或是所有样本在所有属性上取值相同,无法划分;(3)当前节点包含的样本集合为空,不能划分
+
+在<<机器学习实战>>没有判断"所有样本在所有属性上取值相同"这个条件,个人认为原因有两个: 其一, 判断的难度比较大,代码复杂,耗费时间长; 其二, 在满足条件"所有样本在所有属性上取值相同"这个条件时, 其所有样本类别有很大概率是属于同一类, 再者继续训练也只会形成一个单叉树.
+
+## 2. 划分选择
+
+在以上的算法流程中,最重要的步骤就是在属性集A中选择最优的划分属性a, 一般在划分的过程中,希望划分出来的样本子集尽量属于同一类别, 即节点的"纯度"越来越高.
+
+### 2.1 信息增益
+
+["信息熵"](https://zh.wikipedia.org/wiki/%E7%86%B5_(%E4%BF%A1%E6%81%AF%E8%AE%BA))是度量样本集合纯度最常用的一种指标. 假定当前样本集合D中第$k$类样本的比例为$p_k(k=1,2,...,|\mathcal{Y}|)$, 则$D$的信息熵定义为
+
+$$Ent(D)= \sum ^{|\mathcal{Y}|}_{k=1}p_klog_2p_k$$
+
+$Ent(D)$的值越小,则$D$的纯度越高.
+
+计算信息熵时约定:若$p=0$, 则$plog_2p=0$. $Ent(D)$的最小值为0,最大值为$log_2|\mathcal{Y}|$
+
+下面给出信息增益的计算公式
+
+$$Gain(D, a)=Ent(D)- \sum ^V_{v=1} \frac {|D|}{|D^v|}Ent(D^v)$$
+
+$V\{a^1,a^2,...,a^v\}$为属性$a$的属性值集合; $D^v$为使用属性$a$在$D$中进行划分,$D$中属性$a$的属性值为$a^v$的样本子集;  $\frac{|D|}{|D^v|}$为每个分支节点上的权重.
+
+一般而言, 信息增益越大, 则意味着使用属性$a$来进行划分所获得的"纯度提升"越大. 所有在算法中选择属性$a_*=arg_{a \in A} maxGain(D, a)$
+
+python代码[tree_gain.py](https://github.com/mejhwu/machine_learning/blob/master/decision_tree/tree_gain.py)
+
+### 2.2 增益率
+
+信息增益准则对可取值较多的属性有所偏好,为减少这种偏好可能带来的不利影响,可使用"增益率"来选择最优划分属性, 增益率定义为
+
+$$Gain_ratio(D,a)=\frac{Grain(D,a)}{IV(a)}$$
+
+其中
+
+$$IV(a)=-\sum_{v=1}^{V}\frac{|D^v|}{|D|}log_2\frac{|D^v|}{|D|}$$
+
+$IV(a)$称为属性$a$的"固有值"(intrinsic value). 属性$a$的可能取值数目越多(即V越大), 则$IV(a)$的值通常会越大.
+
+需要注意的是, 增益率准则对可取值数目较少的属性所有偏好, 因此根据C4.5算法, 可先从候选划分属性中找出信息增益高于平均水平的属性,再从中选择增益率最高的.
+
+python代码[tree_gain_ratio.py](https://github.com/mejhwu/machine_learning/blob/master/decision_tree/tree_gain_ratio.py)
+
+### 2.3 基尼指数
+
+CART决策树使用"基尼指数"(Gini index)来选择划分属性. 数据集$D$的纯度可以用基尼值来度量:
+
+$$Gini(D)=\sum_{k=1}^{|\mathcal{Y}|}\sum_{k{'}\ne k}p_kp_{k^{'}}=1-\sum_{k=1}^{|\mathcal{Y}|}p_k^2$$
+
+直观来说,$Gini(D)$反映了从数据集$D$中随机抽取两个样本,其类别不一致的概率. 因此, $Gini(D)$越小, 则数据集$D$的纯度越高.
+
+属性$a$的基尼指数定义为
+
+$$Gini\_index(D,a)=\sum_{k=1}^{|\mathcal{Y}|}\frac{|D^v|}{|D|}Gini(D^v)$$
+
+于是,在候选属性集$A$中选取使划分后基尼指数最小的属性作为最优划分属性,即$a_*=arg_{a\in A}min\ Gini\_index(D,a)$
+
+python代码[tree_gini.py](https://github.com/mejhwu/machine_learning/blob/master/decision_tree/tree_gini.py)
+
+## 3. 剪枝处理
+
+剪枝(pruning)是决策树学习算法中对付"过拟合"的主要手段. 决策树剪枝的基本策略有"预剪枝"(prepruning)和"后剪枝"(postpruning). 
+
+### 3.1 预剪枝
+
+预剪枝是指在决策树生成过程中,对每个节点在划分前先进行估计, 若当前节点的划分不能带来决策树泛化性能提升, 则停止划分并讲当前节点标记为页节点.
+
+预剪枝的决策树生成过程类似于二叉树的先序遍历, 划分前先进行判断是否剪枝, 如果不需要剪枝再生成下一个节点.
+
+预剪枝基于"贪心"本质禁止这些分支展开,给预剪枝决策树带来了欠拟合的风险.
+
+预剪枝python伪代码:
+
+```python
+def verity_divide(train_data_set, train_data_set):
+    # 验证集为空不进行划分
+    if 验证集为空:
+        return False
+    选取最优划分属性a
+    划分后节点divide_node = {a: {}}
+    for a的每一个属性值av:
+        令TDv表示训练样本train_data_set中属性a上取值为av的样本子集
+        divide_node[a][av] = TDv中类别最多的类
+    divide_count表示划分后验证的正确数量
+    for train_data_set中的每一个样本:
+        if 验证正确:
+            divide_cout += 1
+    not_divide_count表示train_data_set中样本最多的类的数量
+    if divide_count > not_divide_count:
+        return True
+    else:
+        return False
+
+
+def create_tree(train_data_set, verity_data_set, labels):
+    if train_data_set中样本全输入同一类别C:
+        return 类别C
+    if A为空:
+        return train_data_set中样本数最多的类
+    if not verity_divide(train_data_set, verity_data_set):
+        return D中样本最多的类
+    # 此处可优化, 可先获取最优属性后传入verity_divide()
+    从A中选取最优划分属性a
+    node = {label: {}}
+    for a的每一个属性值av:
+        node[label][av] = {}
+        令TDv表示train_data_set在属性a上取值av的样本子集
+        令TVv表示verity_data_set在属性a上取值为av的样本子集
+        if TDv为空:
+            node[label][av] = train_data_set中样本最多的类
+        else:
+            node[label][av] = create_tree(TDv, TVv,  labels)
+    return node
+```
+
+完整代码[tree_gain_prepruning.py](https://github.com/mejhwu/machine_learning/blob/master/decision_tree/tree_gain_prepruning.py)
+
+### 3.2 后剪枝
+
+后剪枝是先从训练集生成一颗完整的决策树, 然后自底向上地对非叶子节点进行考察, 若将该节点对应的子树替换为叶节点能带来决策树的泛化性能提升,则将该子树替换为叶节点.
+
+后剪枝决策树的生成过程类似于二叉树的后续遍历; 即先生成决策树, 在判断是否需要剪枝, 如果需要剪枝则放弃子树, 直接将节点标记为叶节点.
+
+后剪枝的过程是在完全决策树之后进行的,并且要自底向上地对决策树中的所有非叶节点进行逐一考察, 因此其训练时间开销比未剪枝决策树和预剪枝决策树都要大得多.
+
+后剪枝python伪代码:
+
+```python
+def verity_divide(tree, train_data_set, verity_data_set):
+    # 验证集为空不剪枝
+    if 验证集为空:
+        return False
+    not_divide_right_rate = 不划分的验证正确率
+    divide_right_rate = 划分后的验证正确率
+    # 不划分的验证正确率大于划分的验证正确率时剪枝
+    if not_divide_right_rate > divide_right_rate:
+        return True
+    else:
+        return False
+
+
+def create_tree(train_data_set, verity_data_set, labels):
+    if train_data_set中样本全输入同一类别C:
+        return 类别C
+    if A为空:
+        return train_data_set中样本数最多的类
+    if not verity_divide(train_data_set, verity_data_set):
+        return train_data_set中样本最多的类
+    从A中选取最优划分属性a
+    node = {label: {}}
+    for a的每一个属性值av:
+        node[label][av] = {}
+        令TDv表示train_data_set在属性a上取值av的样本子集
+        令TVv表示verity_data_set在属性a上取值av的样本子集
+        if TDv为空:
+            node[label][av] = train_data_set中样本最多的类
+        else:
+            node[label][av] = create_tree(TDv, TVv, labels)
+    if verity_divide(node, train_data_set, verity_data_set):
+        node = train_data_set中样本最多的类
+    return node
+```
+
+完整代码[tree_gain_postpruning](https://github.com/mejhwu/machine_learning/blob/master/decision_tree/tree_gain_postpruning.py)
+
+## 4. 连续与缺失值
+
+### 4.1 连续值处理
+
+由于连续属性的可取值数目不再有限, 因此,不能直接根据连续属性的可取值来对节点进行划分, 需要将连续属性离散化, 最简单的策略是采用二分法对连续属性进行处理.
+
+给定样本集$D$和连续属性$a$, 假定$a$在$D$上出现了n个不同的取值, 将这些值从小到大进行排序, 记为$\{a^1,a^1,...,a^n\}$. 基于划分点$t$可将D分为子集$D_t^-$和$D_t^+$, 其中$D_t^-$包含那行属性a上取值不大于t的样本, 而$D_t^+$则包含那些在属性$a$上取值大于$t$的样本. 显然, 对相邻的属性取值$a^i$和$a^{i+1}$来说, $t$在区间$[a^i,a^{i+1})$中取任何值产生的划分结果相同. 因此, 对连续属性$a$, 我们可考察包含$n-1$个元素的候选划分点集合
+
+$$T_a=\{\frac{a^i+a^{i+1}}{2}|i\le i\le n-1|\}$$
+
+即把区间$[a^i,a^{i+1})$的中位点$\frac{a^i+a^{i+1}}{2}$作为候选划分点. 然后就可像离散属性一样来考察这些划分点, 选取最优的划分点进行样本集合的划分.
+
+$$Gain(D,a)=\max\limits_{t\in T_a} Ent(D) - \sum_{\lambda\in \{-,+\}} \frac{|D|}{|D_t^\lambda|}Ent(D_t^\lambda)$$
+
+其中$Gain(D,a,t)$是样本集$D$基于划分点$t$二分后的信息增益. 于是,可选择$Gain(D,a,t)$最大化的划分点.
+
+需要注意, 与离散值不同, 若当前节点划分属性为连续属性, 连续属性还可作为其后代节点的划分属性.
+
+在写代码的时候需要注意在离散属性和连续属性的$gain(D,a)$时需要分开处理. 在构建决策树时, 离散属性和连续属性也需要分开处理, 因为划分连续属性时,不需要在数据集中去除连续属性.
+
+完整python代码[tree_gain_continuous_value.py](https://github.com/mejhwu/machine_learning/blob/master/decision_tree/tree_gain_continuous_value.py)
+
+### 4.2 缺失值处理
+
+面对缺失值需要解决的两个问题: (1)如何在属性值缺失的情况下进行划分属性选择? (2)给定划分属性,若样本在改属性上的值缺失,如何对样本进行划分?
+
+给定训练集$D$和属性$a$, 令$\tilde{D}$表示$D$中在属性$a$上没有缺失值的样本子集. 对问题(1), 显然仅可根据$\tilde{D}$来判断属性$a$的优劣. 假定属性$a$有$V$个可取值$\{a^1,a^2,...,a^V\}$, 令$\tilde{D}^v$表示$\tilde{D}$在属性$a$上的取值为$a^v$的样本子集, $\tilde{D}_k$表示$\tilde{D}$属性第$k$类$(k=1,2,...,|\mathcal{Y}|)$的样本子集, 则显然有$\tilde{D}=\cup_{k=1}^{|\mathcal{Y}|}\tilde{D}_k$, $\tilde{D}=\cup_{v=1}^V\tilde{D}^v$. 假定我们为每个样本$\boldsymbol{x}$赋予一个权重$w_{\boldsymbol{x}}$, 并定义
+
+$$\rho=\frac{\sum_{\boldsymbol{x}\in \tilde{D}}w_{\boldsymbol{x}}}{\sum_{\boldsymbol{x}\in D}w_{\boldsymbol{x}}}$$
+
+$$\tilde{p}_k=\frac{\sum_{\boldsymbol{x}\in \tilde{D}_k}w_{\boldsymbol{x}}}{\sum_{\boldsymbol{x}\in \tilde{D}}w_{\boldsymbol{x}}} \ \ \ \ \ (1\le k\le |\mathcal{Y}|)$$
+
+$$\tilde{r}_v=\frac{\sum_{\boldsymbol{x}\in \tilde{D}^v}w_{\boldsymbol{x}}}{\sum_{\boldsymbol{x}\in \tilde{D}}w_{\boldsymbol{x}}} \ \ \ \ \ (1\le v\le V)$$
+
+对属性$a$, $\rho$表示无缺失值样本所占的比例, $\tilde{p}_k$表示无缺失值样本中第$k$类所占的比例, $\tilde{r}_v$则表示无缺失值样本中属性a上取值$a^v$的样所占的比例. 显然$\sum_{k=1}^{|\mathcal{Y}|}\tilde{p}_k=1$, $\sum_{v=1}^V\tilde{r}_v=1$
+
+基于上述定义, 可将信息增益的计算式推广为
+
+$$Gian(D,a)=\rho \times Gain(\tilde{D},a)=\rho \times (Ent(\tilde{D}) - \sum_{v=1}^V \tilde{r}_v Ent(\tilde{D}^v))$$
+
+其中
+
+$$Ent(\tilde{D}) = - \sum_{k=1}^{|\mathcal{Y}|}\tilde{p}_k log_2 \tilde{p}_k$$
+
+对问题(2), 若样本$\boldsymbol{x}$在划分属性$a$上的取值已知, 则将$\boldsymbol{x}$划入与其取值对应的子节点, 且样本权值在子节点中保持$w_{\boldsymbol{x}}$. 若样本$\boldsymbol{x}$在划分属性$a$上的取值未知, 则将$\boldsymbol{x}$同时划入所有子节点, 且样本权值在与属性$a^v$对应的子节点中调整为$\tilde{r}_v \cdot w_{\boldsymbol{x}}$; 直观地看, 就是让同一样本以不同的概率划入到不同的子节点中去.
